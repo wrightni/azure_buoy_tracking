@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% set active_page = "hourly" %}
+{% block title %} Hourly Forecasts {% endblock %}
+
+{% block content %}
+
+<br/>
+
+<div class="container">
+  <h4>Current time: {{ current_time }} UTC</h4>
+  <h4>Last data sync: {{ last_update }}</h4>
+  <h4>Buoy position age: {{ last_known_pos }}</h4>
+</div>
+
+<br/>
+
+<div class="container">
+  <h2>Drift Forecast</h2>
+  <table class="table table-sm sortable">
+    <thead>
+      <tr>
+        <th scope="col">Time</th>
+        <th scope="col">Latitude</th>
+        <th scope="col">Longitude</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for point in fc_points %}
+      <tr>
+        <td>{{ point.date }}</td>
+        <td>{{ point.lat }}</td>
+        <td>{{ point.lon }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="container">
+  <h2>Drift History</h2>
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th scope="col">Time</th>
+        <th scope="col">Latitude</th>
+        <th scope="col">Longitude</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for point in points %}
+      <tr>
+        <td>{{ point.date }} </td>
+        <td>{{ point.lat }}</td>
+        <td>{{ point.lon }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

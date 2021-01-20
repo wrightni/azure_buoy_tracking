@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% set active_page = "custom" %}
+{% block title %} Custom Forecast {% endblock %}
+
+{% block content %}
+
+<div class="container">
+  <h1> Coming Soon </h1>
+  </br>
+  <form action="/custom", METHOD="POST">
+     <input type="text" placeholder="Time in UTC" name="lead_time">
+     <input type="submit" value="Run Forecast" class="btn btn-secondary">
+  </form>
+  <p> The ability to forecast the buoy location at a specific time </p>
+</div>
+
+<br/>
+
+{% endblock %}

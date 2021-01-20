@@ -1,0 +1,18 @@
+{
+    "SIMB": {
+      "t_col": 2,
+      "lat_col": 3,
+      "lon_col": 4,
+      "line_len": 1410,
+      "date_fmt": "xl",
+      "delim": ","
+    },
+    "PacificGyre": {
+        "t_col": 2,
+        "lat_col": 3,
+        "lon_col": 4,
+        "line_len": 0,
+        "date_fmt": "None",
+        "delim": "None"
+      }
+    }
