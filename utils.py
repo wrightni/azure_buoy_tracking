@@ -17,9 +17,12 @@ def decimaldoy_to_datetime(decimaldoy, year=2020):
     return temp + delta
 
 
-def format_timedelta(tdelta):
+def format_timedelta(tdelta, show_seconds=True):
     s = tdelta.total_seconds()
     hours, remainder = divmod(s, 3600)
     minutes, seconds = divmod(remainder, 60)
 
-    return "{:02}h {:02}m {:02}s".format(int(hours), int(minutes), int(seconds))
+    if show_seconds:
+        return "{:02}h {:02}m {:02}s".format(int(hours), int(minutes), int(seconds))
+    else:
+        return "{:02}h {:02}m".format(int(hours), int(minutes))

@@ -15,35 +15,35 @@
   <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
-          <a class="navbar-brand" href="{{ url_for('hourly') }}">SIDEx Camp Drift</a>
+          <a class="navbar-brand" href="{{ url_for('overview') }}">SIDEx Camp Drift</a>
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
           </button>
           <div class="collapse navbar-collapse" id="navbarSupportedContent">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
               <li class="nav-item">
-                <a {% if active_page == "hourly" %} 
+                <a {% if active_page == "overview" %} 
                   class="nav-link active" 
                   {% else %}
                   class="nav-link"
                   {% endif %}
-                  href="{{ url_for('hourly') }}">Hourly Forecast</a>
+                  href="{{ url_for('overview') }}">Overview</a>
               </li>
               <li class="nav-item">
-                <a {% if active_page == "custom" %} 
+                <a {% if active_page == "pilot" %} 
                 class="nav-link active" 
                 {% else %}
                 class="nav-link"
                 {% endif %}
-                href="{{ url_for('custom') }}">Custom Forecast</a>
+                href="{{ url_for('pilot') }}">Pilot's Page</a>
               </li>
               <li class="nav-item">
-                <a {% if active_page == "plot" %} 
+                <a {% if active_page == "satellite" %} 
                 class="nav-link active" 
                 {% else %}
                 class="nav-link"
                 {% endif %}
-                href="{{ url_for('plot') }}">Plot</a>
+                href="{{ url_for('satellite') }}">Satellite Tasking</a>
               </li>
             </ul>
           </div>

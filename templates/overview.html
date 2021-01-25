@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% set active_page = "overview" %}
+{% block title %} Overview {% endblock %}
+
+{% block content %}
+
+<div class="container">
+    <div class="row justify-content-md-center">
+        <div class="col">
+        </div>
+        <div class="col-6 text-center">
+            <h3>Current Time </h3>
+            <h4>{{ current_time }} UTC</h4>
+        </div>
+        <div class="col">
+            <p>Last Update: {{ last_sync }}</p>
+        </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <h5><b>Last Known Position:</b> {{ lkp.lat }}, {{ lkp.lon }}</h5>
+        <h5><b>Last Report:</b> {{ lkp.date }} UTC ({{ obs_age }} ago) </h5>
+      </div>
+    </div>
+  </div>
+
+<br/>
+
+<div class="container">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Document</title>
+        {{ js_resources|indent(4)|safe }}
+        {{ css_resources|indent(4)|safe }}
+        {{ plot_script|indent(4)|safe }}
+    </head>
+    <body>
+        <div style="display: flex; justify-content: center;">
+            {{ plot_div|indent(4)|safe }}
+        </div>
+    </body>
+</div>
+
+{% endblock %}
