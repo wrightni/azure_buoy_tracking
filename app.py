@@ -8,11 +8,10 @@ from bokeh.io import curdoc
 from bokeh.resources import INLINE
 from bokeh.embed import components
 from bokeh.plotting import figure, output_file, show
-from bokeh.palettes import Greys6
-from bokeh.transform import linear_cmap
-
+from bokeh.palettes import Greys6, Set1
+from bokeh.transform import factor_cmap
 from datetime import datetime, timedelta
-from forecast_position import simple_forecast
+from forecast_position import simple_forecast, advanced_forecast
 from data_fetch import fetch_by_buoyid
 from utils import format_timedelta
 
@@ -54,6 +53,15 @@ class Variables(db.Model):
         return '<Name %r>' % self.id
 
 
+# @app.template_filter()
+# def format_datetime(value, format='medium'):
+#     if format == 'full':
+#         format="EEEE, d. MMMM y 'at' HH:mm"
+#     elif format == 'medium':
+#         format="EE dd.MM.y HH:mm"
+#     return babel.dates.format_datetime(value, format)
+
+
 @app.before_first_request
 def init_tables():
     default_date = datetime(year=1900, month=1, day=1)
@@ -61,13 +69,25 @@ def init_tables():
     if not exists:
         new_row = Variables(key_string="last_update", value=default_date)
         db.session.add(new_row)
-        db.session.commit()
-
+    # Last update of simple forecast
     exists = Variables.query.filter_by(key_string="s_update").first()
     if not exists:
         new_row = Variables(key_string="s_update", value=default_date)
         db.session.add(new_row)
-        db.session.commit()
+    # Last update of advanced forecast
+    exists = Variables.query.filter_by(key_string="a_update").first()
+    if not exists:
+        new_row = Variables(key_string="a_update", value=default_date)
+        db.session.add(new_row)
+    # Filename of stored topaz data
+    exists = Variables.query.filter_by(key_string="topaz_start").first()
+    if not exists:
+        new_row = Variables(key_string="topaz_start", value=default_date)
+        db.session.add(new_row)
+        new_row = Variables(key_string="topaz_end", value=default_date)
+        db.session.add(new_row)
+    
+    db.session.commit()
 
 
 @app.route("/")
@@ -135,31 +155,34 @@ def pilot():
 def satellite():
     current_time = datetime.utcnow()
     if request.method == "POST":
-        return "Thanks for clicking the button."
-    else:
-
         last_fc_update = Variables.query.filter_by(key_string="s_update").first()
+        update_forecast(last_fc_update, forecast_method='a')
+        adv_fc = Forecast.query.filter_by(method='a')[0]
+    else:
+        adv_fc = (0, 0, 0)
 
-        # Update the forecast if its age is greater than the last data sync
-        if current_time - last_fc_update.value > timedelta(hours=1):
-            update_forecast(last_fc_update)
+    last_fc_update = Variables.query.filter_by(key_string="s_update").first()
 
-        last_known_point = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
-        fc_pos = Forecast.query.order_by(Forecast.date)
+    # Update the forecast if its age is greater than the last data sync
+    if current_time - last_fc_update.value > timedelta(hours=1):
+        update_forecast(last_fc_update)
 
-        p = make_plot(forecast=True, size=(600,600), record='partial')
-    
-        script, div = components(p)
-        return render_template(
-                'satellite.html',
-                fc_points=fc_pos,
-                lkp=last_known_point,
-                plot_script=script,
-                plot_div=div,
-                js_resources=INLINE.render_js(),
-                css_resources=INLINE.render_css(),
-            ).encode(encoding='UTF-8')
+    last_known_point = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
+    fc_pos = Forecast.query.filter_by(method='a').order_by(Forecast.date)
 
+    p = make_plot(forecast=True, size=(600,600), record='full')
+
+    script, div = components(p)
+    return render_template(
+            'satellite.html',
+            fc_points=fc_pos,
+            adv_fc=adv_fc,
+            lkp=last_known_point,
+            plot_script=script,
+            plot_div=div,
+            js_resources=INLINE.render_js(),
+            css_resources=INLINE.render_css(),
+        ).encode(encoding='UTF-8')
 
 
 def update_record(current_time, last_update):
@@ -171,16 +194,15 @@ def update_record(current_time, last_update):
     # The number of positions requested is the number of hours since the last update + 2
     time_since_update = current_time - last_update.value
     n_pos = int(time_since_update.total_seconds()/(3600)) + 2
-    print(n_pos)
+
     # Download the most recent data from the buoy
     new_points = fetch_by_buoyid("443910", n_pos=n_pos+2)
-    print(len(new_points))
+
     # Add any buoy points to the DB if they do not already exist
     for pos_time, lat, lon in new_points:
         exists = Buoy.query.filter_by(date=pos_time).first()
         if not exists:
             new_point_entry = Buoy(date=pos_time, lat=lat, lon=lon)
-            print("New point added")
             try:
                 db.session.add(new_point_entry)
             except:
@@ -200,22 +222,44 @@ def update_record(current_time, last_update):
 
 def update_forecast(last_update, forecast_method='s'):
 
-    # Select the last 8 buoy points
-    drift_track = [(0,0,0) for _ in range(8)]
-    points = Buoy.query.order_by(Buoy.date.desc()).limit(8)
+    if forecast_method == 's':
+        # Select the last 8 buoy points
+        n_pts = 8
+        drift_track = [(0,0,0) for _ in range(n_pts)]
+        points = Buoy.query.order_by(Buoy.date.desc()).limit(n_pts)
 
-    # Need place these in drift track in reverse order
-    i=7
-    for point in points:
-        drift_track[i] = (point.date, point.lat, point.lon)
-        i-=1
+        # Need place these in drift track in reverse order
+        i = n_pts-1
+        for point in points:
+            drift_track[i] = (point.date, point.lat, point.lon)
+            i-=1
 
-    init_time = datetime.utcnow()
-    forecast_position = simple_forecast(init_time+timedelta(hours=24), drift_track, full_forecast=True)
+        init_time = datetime.utcnow()
+        forecast_position = simple_forecast(init_time+timedelta(hours=24), drift_track, full_forecast=True)
+    elif forecast_method == 'a':
+        topaz_start_entry = Variables.query.filter_by(key_string="topaz_start").first()
+        topaz_end_entry = Variables.query.filter_by(key_string="topaz_end").first()
+
+        # lkp = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
+        lkp = Buoy.query.order_by(Buoy.date.desc()).limit(25)[24]
+        last_known_point = (lkp.date, lkp.lat, lkp.lon)
+
+        topaz_start, topaz_end, forecast_position = advanced_forecast(last_known_point, 
+                                                                      lkp.date+timedelta(hours=96), 
+                                                                      topaz_start=topaz_start_entry.value,
+                                                                      topaz_end=topaz_end_entry.value,
+                                                                      full_forecast=True)
+        
+        topaz_start_entry.value = topaz_start
+        topaz_end_entry.value = topaz_end
+        db.session.commit()
+        
+    else:
+        return last_update
 
     # Delete the existing records for this forecast method
     try:
-        db.session.query(Forecast).filter(Forecast.method == 's').delete()
+        db.session.query(Forecast).filter(Forecast.method == forecast_method).delete()
         db.session.commit()
     except:
         pass
@@ -255,13 +299,17 @@ def make_plot(forecast=False, size=(800, 800), record='full'):
         lat_fc = drift_forecast.lat
         lon_fc = drift_forecast.lon
         date_fc = drift_forecast.date
+        method_fc = drift_forecast.method
         forecast_legend = 'Forecast Track'
+        colors = factor_cmap('method', palette=Set1[3], factors=method_fc.unique())
     else:
         index = drift_history.date.idxmax()
         lat_fc = [drift_history.lat[index]]
         lon_fc = [drift_history.lon[index]]
         date_fc = [drift_history.date[index]]
+        method_fc = ['s']   # placeholder value
         forecast_legend = 'Last Known'
+        colors = 'green'
     
     ht = HoverTool(tooltips=[("time", "@date{%F %H:%M}"),
                              ("(lat, lon)", "(@y, @x)")],
@@ -276,7 +324,8 @@ def make_plot(forecast=False, size=(800, 800), record='full'):
     data_source_forecast = ColumnDataSource(data=dict(
                                             x=lon_fc,
                                             y=lat_fc,
-                                            date=date_fc
+                                            date=date_fc,
+                                            method=method_fc
                                             ))
 
     p = figure(title = "Drift History", sizing_mode="fixed", 
@@ -284,5 +333,6 @@ def make_plot(forecast=False, size=(800, 800), record='full'):
     p.xaxis.axis_label = "Longitude"
     p.yaxis.axis_label = "Latitude"
     p.circle('x', 'y', source=data_source, color='black', fill_alpha=0.4, size=10, legend_label='Drift History')
-    p.circle('x', 'y', source=data_source_forecast, color='green', fill_alpha=0.8, size=10, legend_label=forecast_legend)
+
+    p.circle('x', 'y', source=data_source_forecast, color=colors, fill_alpha=0.8, size=10, legend_label=forecast_legend)
     return p

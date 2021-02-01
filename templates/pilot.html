@@ -18,7 +18,7 @@
         </thead>
         <tbody>
           <tr>
-            <td>{{ lkp.date }} </td>
+            <td>{{ lkp.date.strftime("%Y-%m-%d %H:%M:%S") }} </td>
             <td>{{ lkp.lat }}</td>
             <td>{{ lkp.lon }}</td>
           </tr>
@@ -37,7 +37,7 @@
         <tbody>
           {% for point in fc_points %}
           <tr>
-            <td>{{ point.date }}</td>
+            <td>{{ point.date.strftime("%Y-%m-%d %H:%M:%S") }}</td>
             <td>{{ point.lat }}</td>
             <td>{{ point.lon }}</td>
           </tr>

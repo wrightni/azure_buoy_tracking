@@ -5,12 +5,19 @@
 {% block content %}
 
 <div class="container">
-  <h3> Coming Soon </h3>
-  <form action="/satellite", METHOD="POST">
-     <input type="text" placeholder="Time in UTC" name="lead_time">
-     <input type="submit" value="Run Forecast" class="btn btn-secondary">
-  </form>
-  <p> Enter the expected satellite overpass time to recieve a custom forecast </p>
+  <div class="row">
+    <div class="col"> 
+      <h3> Custom Forecast </h3>
+      <form action="/satellite", METHOD="POST">
+        <input type="text" placeholder="Time in UTC" name="lead_time">
+        <input type="submit" value="Run Forecast" class="btn btn-secondary">
+      </form>
+      <p> Enter the expected satellite overpass time to recieve a custom forecast </p>
+    </div>
+    <div class="col">
+      {{ adv_fc.date }} {{ adv_fc.lat }} {{ adv_fc.lon }}
+    </div>
+  </div>
 </div>
 
 <br/>
@@ -29,7 +36,7 @@
         </thead>
         <tbody>
           <tr>
-            <td>{{ lkp.date }} </td>
+            <td>{{ lkp.date.strftime("%Y-%m-%d %H:%M:%S") }} </td>
             <td>{{ lkp.lat }}</td>
             <td>{{ lkp.lon }}</td>
           </tr>
@@ -48,7 +55,7 @@
         <tbody>
           {% for point in fc_points %}
           <tr>
-            <td>{{ point.date }}</td>
+            <td>{{ point.date.strftime("%Y-%m-%d %H:%M:%S") }}</td>
             <td>{{ point.lat }}</td>
             <td>{{ point.lon }}</td>
           </tr>
