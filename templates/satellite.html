@@ -7,15 +7,19 @@
 <div class="container">
   <div class="row">
     <div class="col"> 
-      <h3> Custom Forecast </h3>
+      <h4> Request New Forecast </h4>
       <form action="/satellite", METHOD="POST">
-        <input type="text" placeholder="Time in UTC" name="lead_time">
-        <input type="submit" value="Run Forecast" class="btn btn-secondary">
+        <input type="submit" value="Update Forecast" class="btn btn-secondary">
       </form>
-      <p> Enter the expected satellite overpass time to recieve a custom forecast </p>
+      <p> Run a new simulation. This may take up to 60 seconds <br/>
+        <small>Will not run if time since last update is less than 15 minutes</small> 
+      </p>
     </div>
-    <div class="col">
-      {{ adv_fc.date }} {{ adv_fc.lat }} {{ adv_fc.lon }}
+    <div class="col text-end">
+      <p>
+        Current Time: {{ current_time.strftime("%Y-%m-%d %H:%M") }} UTC <br/>
+        Last TOPAZ download: {{ topaz_age }} <br/>
+        Last Forecast Run: {{ fc_age }} </p>
     </div>
   </div>
 </div>
@@ -36,9 +40,9 @@
         </thead>
         <tbody>
           <tr>
-            <td>{{ lkp.date.strftime("%Y-%m-%d %H:%M:%S") }} </td>
-            <td>{{ lkp.lat }}</td>
-            <td>{{ lkp.lon }}</td>
+            <td>{{ lkp.date.strftime("%Y-%m-%d %H:%M") }} UTC</td>
+            <td>{{ lkp.lat|round(5) }}</td>
+            <td>{{ lkp.lon|round(5) }}</td>
           </tr>
         </tbody>
       </table>
@@ -55,9 +59,9 @@
         <tbody>
           {% for point in fc_points %}
           <tr>
-            <td>{{ point.date.strftime("%Y-%m-%d %H:%M:%S") }}</td>
-            <td>{{ point.lat }}</td>
-            <td>{{ point.lon }}</td>
+            <td>{{ point.date.strftime("%Y-%m-%d %H:%M") }} UTC</td>
+            <td>{{ point.lat|round(5) }}</td>
+            <td>{{ point.lon|round(5) }}</td>
           </tr>
           {% endfor %}
         </tbody>

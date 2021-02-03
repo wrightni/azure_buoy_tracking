@@ -10,7 +10,8 @@
         </div>
         <div class="col-6 text-center">
             <h3>Current Time </h3>
-            <h4>{{ current_time }} UTC</h4>
+            <h4>{{ current_time|timezone_conversion(tz='utc', format='%Y-%m-%d %H:%M:%S') }} UTC</h4>
+            <h4>{{ current_time|timezone_conversion(format='%Y-%m-%d %H:%M:%S') }} AKST</h4>
         </div>
         <div class="col">
             <p>Last Update: {{ last_sync }}</p>

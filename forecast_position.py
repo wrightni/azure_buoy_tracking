@@ -87,6 +87,9 @@ def simple_forecast(target_time, drift_track, full_forecast=False):
 
 def advanced_forecast(buoy_position, target_time, topaz_start, topaz_end, full_forecast=False):
 
+    # To track the time since last topaz download
+    #    return true if the data was refreshed, false otherwise
+    topaz_update = False
     # Reconstruct the topaz filename from the stored start and end time
     topaz_filename = '{}/topaz/{}_{}_velocityfield.nc'.format(sys.path[0],
                                                                datetime.strftime(topaz_start, "%Y-%m-%d"), 
@@ -100,6 +103,7 @@ def advanced_forecast(buoy_position, target_time, topaz_start, topaz_end, full_f
         except FileNotFoundError:
             pass
         topaz_filename, topaz_start, topaz_end = fetch_topaz_forecast(buoy_position, target_time, "{}/topaz".format(sys.path[0]))
+        topaz_update = True
 
     # Load the variables from the file
     topaz_vars = load_topaz_vars(topaz_filename)
@@ -108,7 +112,7 @@ def advanced_forecast(buoy_position, target_time, topaz_start, topaz_end, full_f
     forecast_drift = _advanced_forecast(buoy_position, target_time, topaz_vars, full_forecast=full_forecast)
 
     # Return the start and end time of the topaz file that was (maybe) downloaded, and also the forecast result
-    return topaz_start, topaz_end, forecast_drift
+    return topaz_update, topaz_start, topaz_end, forecast_drift
 
 
 def _advanced_forecast(buoy_position, target_time, topaz_vars, full_forecast=False):

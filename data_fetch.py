@@ -84,9 +84,9 @@ def parse_data(text, t_col, lat_col, lon_col, date_format,
         else:
             t = datetime.fromisoformat(data[t_col])
         
-        # Round to 5 decimal places, approx. meter scale accuracy level
-        lat = round(float(data[lat_col]), 5) 
-        lon = round(float(data[lon_col]), 5)
+        # Round to 5 decimal places, approx. centimeter scale accuracy level
+        lat = float(data[lat_col])
+        lon = float(data[lon_col])
 
         # Skip repeated position updates
         if t != t_previous:
