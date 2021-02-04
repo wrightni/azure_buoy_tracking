@@ -248,7 +248,7 @@ def update_forecast(last_update, forecast_method='s'):
         topaz_start_entry = Variables.query.filter_by(key_string="topaz_start").first()
         topaz_end_entry = Variables.query.filter_by(key_string="topaz_end").first()
 
-        # lkp = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
+        #lkp = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
         lkp = Buoy.query.order_by(Buoy.date.desc()).limit(25)[24]
         last_known_point = (lkp.date, lkp.lat, lkp.lon)
 
@@ -258,9 +258,10 @@ def update_forecast(last_update, forecast_method='s'):
                                                           topaz_start=topaz_start_entry.value,
                                                           topaz_end=topaz_end_entry.value,
                                                           full_forecast=True)
+
         if topaz_update:
             tu = Variables.query.filter_by(key_string="topaz_update").first()
-            tu = datetime.utcnow()
+            tu.value = datetime.utcnow()
         topaz_start_entry.value = topaz_start
         topaz_end_entry.value = topaz_end
         db.session.commit()

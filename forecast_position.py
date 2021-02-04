@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import numpy as np
 from scipy import interpolate
 import netCDF4 as ncdf
-import pyproj
+from pyproj import Transformer
 
 import geo_tools
 
@@ -110,7 +110,7 @@ def advanced_forecast(buoy_position, target_time, topaz_start, topaz_end, full_f
 
     # Run the actual forecast
     forecast_drift = _advanced_forecast(buoy_position, target_time, topaz_vars, full_forecast=full_forecast)
-
+    #forecast_drift = []
     # Return the start and end time of the topaz file that was (maybe) downloaded, and also the forecast result
     return topaz_update, topaz_start, topaz_end, forecast_drift
 
@@ -126,7 +126,6 @@ def _advanced_forecast(buoy_position, target_time, topaz_vars, full_forecast=Fal
     :param buoy_position: (datetime, lat, lon) of the buoy position
     :return: (latitude, longitude) forecast
     """
-
     t, lats, lons, u, v = topaz_vars
     # Topaz time axis is in units of hours since 01/01/1950
     time_units_origin = datetime(1950, 1, 1)
@@ -152,22 +151,27 @@ def _advanced_forecast(buoy_position, target_time, topaz_vars, full_forecast=Fal
                               np.shape(lons))
 
     # Trim the u/v grids to a local window around the buoy location
-    # Local grid size (in each direction from center)
-    lgs = 6
-    
-    # print(lats)
-    # print(lons)
+    # Local grid size (in each direction from center), 12km gridcell = 1 cells per 12hr at 1km/hr
+    lgs = round(lead_time_hours / 24) + 2
+
+    # Sanitize the local grid size based on lat/lon grid size
+    a, b, i, j = local_grid_bounds_check(lats, ll_idx, lgs)
 
     # trim u and v
-    u = u[t0:t0 + lead_time_hours + 4, ll_idx[0] - lgs:ll_idx[0] + lgs, ll_idx[1] - lgs:ll_idx[1] + lgs]
-    v = v[t0:t0 + lead_time_hours + 4, ll_idx[0] - lgs:ll_idx[0] + lgs, ll_idx[1] - lgs:ll_idx[1] + lgs]
-    lats = lats[ll_idx[0] - lgs:ll_idx[0] + lgs, ll_idx[1] - lgs:ll_idx[1] + lgs]
-    lons = lons[ll_idx[0] - lgs:ll_idx[0] + lgs, ll_idx[1] - lgs:ll_idx[1] + lgs]
+    u = u[t0:t0 + lead_time_hours + 4, a:b, i:j]
+    v = v[t0:t0 + lead_time_hours + 4, a:b, i:j]
+    lats = lats[a:b, i:j]
+    lons = lons[a:b, i:j]
+
+    # u = u[t0:t0 + lead_time_hours + 4, ll_idx[0] - lgs:ll_idx[0] + lgs, ll_idx[1] - lgs:ll_idx[1] + lgs]
+    # v = v[t0:t0 + lead_time_hours + 4, ll_idx[0] - lgs:ll_idx[0] + lgs, ll_idx[1] - lgs:ll_idx[1] + lgs]
+    # lats = lats[ll_idx[0] - lgs:ll_idx[0] + lgs, ll_idx[1] - lgs:ll_idx[1] + lgs]
+    # lons = lons[ll_idx[0] - lgs:ll_idx[0] + lgs, ll_idx[1] - lgs:ll_idx[1] + lgs]
 
     # Reproject the lat/lon grid to one with units of meters
-    # Create the projections for wgs84 (4326) and polar stereo (3413)
-    proj_ll = pyproj.Proj('epsg:4326')
-    proj_ps = pyproj.Proj('epsg:3413')
+    # Create the projection transformations for wgs84 (4326) and polar stereo (3413)
+    transformer_forward = Transformer.from_crs('epsg:4326', 'epsg:3413', always_xy=True)
+    transformer_reverse = Transformer.from_crs('epsg:3413', 'epsg:4326', always_xy=True)
 
     #  x/y grid
     grid_x = np.zeros(np.shape(lons))
@@ -177,15 +181,15 @@ def _advanced_forecast(buoy_position, target_time, topaz_vars, full_forecast=Fal
     # For each grid cell find x/y values from lon/lat
     for i in range(np.shape(grid_y)[0]):
         for j in range(np.shape(grid_y)[1]):
-            grid_x[i, j],  grid_y[i, j] = pyproj.transform(proj_ll, proj_ps, lons[i, j], lats[i, j], always_xy=True)
+            grid_x[i, j],  grid_y[i, j] = transformer_forward.transform(lons[i, j], lats[i, j])
 
     # Trim and round the reprojected units to create a regular grid
     grid_x = np.around(np.average(grid_x, axis=0), 0)
     grid_y = np.around(np.average(grid_y, axis=1), 0)
 
     # Project the buoy coordinates onto the xy-grid
-    x, y = pyproj.transform(proj_ll, proj_ps, buoy_lon, buoy_lat, always_xy=True)
-
+    x, y = transformer_forward.transform(buoy_lon, buoy_lat)
+    
     # U and V are in units of m/s
     # Convert to m/hr
     scale_factor = 3600
@@ -199,7 +203,7 @@ def _advanced_forecast(buoy_position, target_time, topaz_vars, full_forecast=Fal
     # len(forecast_drift)==1 if full_forecast==False
     forecast_drift = []
     for tn, x, y in forecast_drift_xy:
-        new_lon, new_lat = pyproj.transform(proj_ps, proj_ll, x, y, always_xy=True)
+        new_lon, new_lat = transformer_reverse.transform(x, y)
         forecast_drift.append((buoy_time+timedelta(hours=tn), new_lat, new_lon))
 
     return forecast_drift
@@ -259,6 +263,33 @@ def rk4(u, v, t0, x0, y0, step_size, final_step, grid_x, grid_y, grid_t, full_fo
     else:
         forecast_drift = [(tn, x, y)]
         return forecast_drift
+
+
+def local_grid_bounds_check(big_grid, idx, lgs):
+    """
+    Checks whether an index and a window of fits within a bigger grid,
+        and returns the proper indicies if not. 
+    big_grid: full grid to draw window from
+    idx: index for window center point [x, y]
+    lgs: local grid size; added in each diminsion to idx
+    """
+    # Add 1 to upper index to get a grid centered on idx
+    #   (because thats how arrays are indexed)
+    xmax, ymax = np.shape(big_grid)
+    a = idx[0] - lgs
+    b = idx[0] + lgs + 1
+    i = idx[1] - lgs
+    j = idx[1] + lgs + 1
+    if a < 0:
+        a = 0
+    if b >= xmax:
+        b = xmax-1
+    if i < 0:
+        i = 0
+    if j >= ymax:
+        j = ymax-1
+
+    return a, b, i, j
 
 
 def load_topaz_vars(topaz_filename):
@@ -343,6 +374,12 @@ def calc_latlon_window(lat, lon, forecast_hours):
     max_distance_km = float(forecast_hours * 4)
     max_distance_deglat = max_distance_km / 111.0     # 1 degree lat is about 111km at 70N
     max_distance_deglon = max_distance_km / 36.0      # 1 degree lon is about 36km at 70.7N
+
+    # Set a minimum download size
+    if max_distance_deglat < 0.5:
+        max_distance_deglat = 0.5
+    if max_distance_deglon < 0.5:
+        max_distance_deglon = 0.5
 
     lat_min = round(lat - max_distance_deglat, 3)
     lat_max = round(lat + max_distance_deglat, 3)
