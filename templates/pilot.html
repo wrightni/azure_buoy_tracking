@@ -18,9 +18,9 @@
         </thead>
         <tbody>
           <tr>
-            <td>{{ lkp.date }} </td>
-            <td>{{ lkp.lat }}</td>
-            <td>{{ lkp.lon }}</td>
+            <td>{{ lkp.date|timezone_conversion }} AKST</td>
+            <td>{{ lkp.lat|round(5) }}</td>
+            <td>{{ lkp.lon|round(5) }}</td>
           </tr>
         </tbody>
       </table>
@@ -37,9 +37,9 @@
         <tbody>
           {% for point in fc_points %}
           <tr>
-            <td>{{ point.date }}</td>
-            <td>{{ point.lat }}</td>
-            <td>{{ point.lon }}</td>
+            <td>{{ point.date|timezone_conversion }} AKST</td>
+            <td>{{ point.lat|round(5) }}</td>
+            <td>{{ point.lon|round(5) }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -62,6 +62,9 @@
             </div>
         </body>
       </div>
+      <figure class="text-center">
+        <p><small>Note: Plot tooltip times are in UTC</small></p>
+      </figure>
     </div>
   </div>
 </div>
