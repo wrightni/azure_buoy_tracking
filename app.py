@@ -96,7 +96,7 @@ def init_tables():
         db.session.add(new_row)
     exists = Variables.query.filter_by(key_string="primary_buoy").first()
     if not exists:
-        new_primary = Variables(key_string='primary_buoy', value_txt="None")
+        new_primary = Variables(key_string="primary_buoy", value_txt="443910")
         db.session.add(new_primary)
     
     db.session.commit()
@@ -115,7 +115,8 @@ def overview():
 
     time_since_update = format_timedelta(time_since_update)
 
-    last_known_point = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
+    # last_known_point = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
+    last_known_point = query_buoy_data(n_pts=1)
 
     obs_age = current_time - last_known_point.date
     obs_age = format_timedelta(obs_age, show_seconds=False)
@@ -147,9 +148,10 @@ def pilot():
 
     # Update the forecast if its age is greater than the last data sync
     if current_time - last_fc_update.value > timedelta(hours=.1):
-        update_forecast(last_fc_update)
+        update_forecast(forecast_method='s')
 
-    last_known_point = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
+    # last_known_point = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
+    last_known_point = query_buoy_data(n_pts=1)
     fc_pos = Forecast.query.filter_by(method='s').order_by(Forecast.date)
 
     p = make_plot(forecast='s', size=(600, 600), record='partial')
@@ -177,7 +179,7 @@ def satellite():
     if request.method == "POST":
         last_fc_update = Variables.query.filter_by(key_string="a_update").first()
         if current_time - last_fc_update.value > timedelta(hours=0.25):
-            update_forecast(last_fc_update, forecast_method='a')
+            update_forecast(forecast_method='a')
 
     # Calculate the time since the forecast was run
     last_fc_update = Variables.query.filter_by(key_string="a_update").first()
@@ -189,8 +191,12 @@ def satellite():
     topaz_age = datetime.utcnow() - last_topaz_update.value
     topaz_age = format_timedelta(topaz_age, show_seconds=False)
 
-    last_known_point = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
+    #last_known_point = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
+    last_known_point = query_buoy_data(n_pts=1)
+
     fc_pos = Forecast.query.filter_by(method='a').order_by(Forecast.date)
+
+    active_buoy = Variables.query.filter_by(key_string='primary_buoy').first().value_txt
 
     p = make_plot(forecast='a', size=(600, 600), record='full')
 
@@ -202,11 +208,43 @@ def satellite():
             fc_age=fc_age,
             topaz_age=topaz_age,
             lkp=last_known_point,
+            active_buoy=active_buoy,
             plot_script=script,
             plot_div=div,
             js_resources=INLINE.render_js(),
             css_resources=INLINE.render_css(),
         ).encode(encoding='UTF-8')
+
+
+def query_buoy_data(n_pts=1):
+    '''
+    Wrapper around Buoy.query to always query for the primary buoy
+    Limits query to most recent n_pts
+    '''
+    primary_buoy = Variables.query.filter_by(key_string="primary_buoy").first().value_txt
+    # If only 1 point was requested, return as an item instead of a list with len=1
+    if n_pts == 1:
+        return Buoy.query.filter_by(buoy=primary_buoy).order_by(Buoy.date.desc()).limit(n_pts)[0]
+    else:
+        return Buoy.query.filter_by(buoy=primary_buoy).order_by(Buoy.date.desc()).limit(n_pts)
+
+
+def update_primary(new_primary):
+    '''
+    Updates the primary buoy for tracking / forecasting
+    This method forces the update of the forecasts
+    :new_primary: ID of new buoy to track. Must be a valid ID in active_buoys.json
+    '''
+    # Find the existing value, then set it to the new value
+    primary_buoy = Variables.query.filter_by(key_string="primary_buoy").first()
+    primary_buoy.value_txt = new_primary
+
+    # Commit the change to the database
+    db.session.commit()
+
+    # Force update both methods to run from the new primary buoy
+    update_forecast(forecast_method='s')
+    update_forecast(forecast_method='a')
 
 
 def update_record(current_time, throttle=15):
@@ -225,20 +263,28 @@ def update_record(current_time, throttle=15):
     with open("static/active_buoys.json", 'r') as fhandle:
         active_buoys = json.load(fhandle)
 
-    # "Best" age from all the buoys
-    primary_age = timedelta(hours=48)  # Start with a temp. value 
     # Update the database with new data for each active buoy
     for buoy in active_buoys:
         update_bouy(current_time, time_since_update, buoy)
-        # Store the age of this buoy's LKP
-        last_known_point = Buoy.query.filter_by(buoy=buoy).order_by(Buoy.date.desc()).limit(1)[0]
-        obs_age = current_time - last_known_point.date
-        # Only keep the buoy with the minimum obs_age
-        if obs_age < primary_age:
-            primary_age = obs_age
-            primary_buoy = buoy
 
-    new_primary = Variables(key_string='primary_buoy', value_txt=buoy)
+    last_known_point = query_buoy_data()
+    obs_age = current_time - last_known_point.date
+
+    # Set a new primary buoy if the current one has not reported in >5 hours
+    if obs_age > timedelta(hours=5):
+        # Set the age threshold to be beaten
+        primary_age = obs_age
+        # Set the current primary buoy
+        primary_buoy = Variables.query.filter_by(key_string="primary_buoy").first().value
+        # Search for a bouy that has the lowest obs_age
+        for buoy in active_buoys:
+            last_known_point = Buoy.query.filter_by(buoy=buoy).order_by(Buoy.date.desc()).limit(1)[0]
+            obs_age = current_time - last_known_point.date
+            if obs_age < primary_age:
+                primary_age = obs_age
+                primary_buoy = buoy
+        
+        update_primary(primary_buoy)
 
     # Update the last update time in the Variables db
     last_update.value = current_time
@@ -252,6 +298,8 @@ def update_bouy(current_time, time_since_update, buoy_id):
     # The number of positions requested is
     #   the number of hours since the last update + 2
     n_pos = int(time_since_update.total_seconds()/(3600)) + 2
+    if n_pos > 200:
+        n_pos = 200
 
     # Download the most recent data from the buoy
     new_points = fetch_by_buoyid(buoy_id, n_pos=n_pos + 2)
@@ -267,13 +315,15 @@ def update_bouy(current_time, time_since_update, buoy_id):
     db.session.commit()
 
 
-def update_forecast(last_update, forecast_method='s'):
+def update_forecast(forecast_method='s'):
 
     if forecast_method == 's':
         # Select the last 8 buoy points
         n_pts = 8
         drift_track = [(0, 0, 0) for _ in range(n_pts)]
-        points = Buoy.query.order_by(Buoy.date.desc()).limit(n_pts)
+        
+        points = query_buoy_data(n_pts=n_pts)
+        # points = Buoy.query.order_by(Buoy.date.desc()).limit(n_pts)
 
         # Need place these in drift track in reverse order
         i = n_pts-1
@@ -288,7 +338,9 @@ def update_forecast(last_update, forecast_method='s'):
         topaz_start_entry = Variables.query.filter_by(key_string="topaz_start").first()
         topaz_end_entry = Variables.query.filter_by(key_string="topaz_end").first()
 
-        lkp = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
+        #lkp = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
+        lkp = query_buoy_data(n_pts=1)
+
         #lkp = Buoy.query.order_by(Buoy.date.desc()).limit(25)[24]
         last_known_point = (lkp.date, lkp.lat, lkp.lon)
 
@@ -312,14 +364,11 @@ def update_forecast(last_update, forecast_method='s'):
         db.session.commit()
         
     else:
-        return last_update
+        return
 
     # Delete the existing records for this forecast method
-    try:
-        db.session.query(Forecast).filter(Forecast.method == forecast_method).delete()
-        db.session.commit()
-    except:
-        pass
+    db.session.query(Forecast).filter(Forecast.method == forecast_method).delete()
+    db.session.commit()
 
     # Add the new forecast data to the database
     for pos_time, lat, lon in forecast_position:
@@ -329,25 +378,29 @@ def update_forecast(last_update, forecast_method='s'):
             db.session.add(new_point_entry)
         except:
             pass
-    try:
-        last_update.value = datetime.utcnow()
-        db.session.commit()
-        # Set time since update to 0
-        time_since_update = timedelta(hours=0)
-        return time_since_update
-    except:
-        return last_update
+
+    # Update the last forecast update value
+    last_update = Variables.query.filter_by(key_string='{}_update'.format(forecast_method)).first()
+    last_update.value = datetime.utcnow()
+    db.session.commit()
+    # Set time since update to 0
+    #time_since_update = timedelta(hours=0)
+    #return time_since_update
+
 
 
 def make_plot(forecast=None, size=(800, 800), record='full'):
-
+    
+    buoy_id = Variables.query.filter_by(key_string="primary_buoy").first().value_txt
     if record == 'partial':
-        drift_history = pd.read_sql("buoy", db.session.bind)
+        drift_history = pd.read_sql("select * from buoy where buoy='{}'".format(buoy_id), db.session.bind)
+        #drift_history = pd.read_sql("buoy", db.session.bind)
         last_idx = drift_history.last_valid_index()
         drift_history.sort_values(by='date', inplace=True)
         drift_history = drift_history.iloc[last_idx-20:]
     else:
-        drift_history = pd.read_sql("buoy", db.session.bind)
+        drift_history = pd.read_sql("select * from buoy where buoy='{}'".format(buoy_id), db.session.bind)
+        #drift_history = pd.read_sql("buoy", db.session.bind)
 
     # If requested to show the forecast, read that data and plot it in red.
     # Otherwise just plot the latest point in red. 
@@ -360,7 +413,7 @@ def make_plot(forecast=None, size=(800, 800), record='full'):
         forecast_legend = 'Forecast Track'
         color = Set1[3][1]
     else:
-        index = drift_history.date.idxmax()
+        index = drift_history.id.idxmax()
         lat_fc = [drift_history.lat[index]]
         lon_fc = [drift_history.lon[index]]
         date_fc = [drift_history.date[index]]
