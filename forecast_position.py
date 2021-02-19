@@ -86,7 +86,7 @@ def simple_forecast(target_time, drift_track, full_forecast=False):
         return forecast_drift[-1]
 
 
-def advanced_forecast(buoy_position, target_time, topaz_start, topaz_end, full_forecast=False):
+def advanced_forecast(buoy_position, target_time, topaz_age, topaz_start, topaz_end, full_forecast=False):
 
     # To track the time since last topaz download
     #    return true if the data was refreshed, false otherwise
@@ -97,7 +97,7 @@ def advanced_forecast(buoy_position, target_time, topaz_start, topaz_end, full_f
                                                                datetime.strftime(topaz_end, "%Y-%m-%d"))
 
     # Returns True if the needed time window falls entirely within the existing topaz data range
-    if not check_existing_topaz(topaz_start, topaz_end, buoy_position[0], target_time):
+    if not check_existing_topaz(topaz_age, topaz_start, topaz_end, buoy_position[0], target_time):
         # Delete the existing data if it exists
         try:
             os.remove(topaz_filename)
@@ -352,7 +352,7 @@ def fetch_topaz_forecast(buoy_position, target_time, output_dir):
     return os.path.join(output_dir, output_filename), date_min, date_max
 
 
-def check_existing_topaz(topaz_start, topaz_end, date_start, date_end):
+def check_existing_topaz(topaz_age, topaz_start, topaz_end, date_start, date_end):
     """
     Check if the existing forecast file matchs the time window needs
     :param topaz_filename: Existing Topaz filename; convention is "YYYY-MM-DD_YYYY-MM-DD_velocityfield.nc"
@@ -361,6 +361,8 @@ def check_existing_topaz(topaz_start, topaz_end, date_start, date_end):
     return true if existing topaz is usable, false if a new one must be acquired
     """
 
+    if topaz_age >= timedelta(hours=24):
+        return False
     # If our needed window falls within the range of this file,
     #   we do not need to download a new set.
     if topaz_start <= date_start and topaz_end >= date_end:

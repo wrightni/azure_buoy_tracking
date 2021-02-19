@@ -252,11 +252,16 @@ def update_forecast(last_update, forecast_method='s'):
         #lkp = Buoy.query.order_by(Buoy.date.desc()).limit(25)[24]
         last_known_point = (lkp.date, lkp.lat, lkp.lon)
 
+        # Check the age of the existing model data
+        last_topaz_update = Variables.query.filter_by(key_string="topaz_update").first()
+        topaz_age = datetime.utcnow() - last_topaz_update.value
+
         [topaz_update, topaz_start, 
-        topaz_end, forecast_position] = advanced_forecast(last_known_point, 
-                                                          lkp.date+timedelta(hours=96), 
-                                                          topaz_start=topaz_start_entry.value,
-                                                          topaz_end=topaz_end_entry.value,
+        topaz_end, forecast_position] = advanced_forecast(last_known_point,
+                                                          lkp.date+timedelta(hours=96),
+                                                          topaz_age,
+                                                          topaz_start_entry.value,
+                                                          topaz_end_entry.value,
                                                           full_forecast=True)
 
         if topaz_update:
