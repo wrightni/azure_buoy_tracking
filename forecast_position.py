@@ -86,7 +86,9 @@ def simple_forecast(target_time, drift_track, full_forecast=False):
         return forecast_drift[-1]
 
 
-def advanced_forecast(buoy_position, target_time, topaz_age, topaz_start, topaz_end, full_forecast=False):
+def advanced_forecast(buoy_position, target_time, 
+                      topaz_age, topaz_start, topaz_end, 
+                      full_forecast=False, retry=True, force_update=True):
 
     # To track the time since last topaz download
     #    return true if the data was refreshed, false otherwise
@@ -97,7 +99,10 @@ def advanced_forecast(buoy_position, target_time, topaz_age, topaz_start, topaz_
                                                                datetime.strftime(topaz_end, "%Y-%m-%d"))
 
     # Returns True if the needed time window falls entirely within the existing topaz data range
-    if not check_existing_topaz(topaz_age, topaz_start, topaz_end, buoy_position[0], target_time):
+    existing_valid = check_existing_topaz(topaz_age, topaz_start, topaz_end,
+                                          buoy_position[0], target_time)
+
+    if not existing_valid or force_update:
         # Delete the existing data if it exists
         try:
             os.remove(topaz_filename)
@@ -110,7 +115,20 @@ def advanced_forecast(buoy_position, target_time, topaz_age, topaz_start, topaz_
     topaz_vars = load_topaz_vars(topaz_filename)
 
     # Run the actual forecast
-    forecast_drift = _advanced_forecast(buoy_position, target_time, topaz_vars, full_forecast=full_forecast)
+    try:
+        forecast_drift = _advanced_forecast(buoy_position, target_time, topaz_vars, full_forecast=full_forecast)
+    except ValueError:
+        # This happens when the buoy position falls out of the model ROI bounds
+        # Retry with a forced update
+        if retry and not topaz_update:
+            return advanced_forecast(buoy_position, target_time, topaz_age, topaz_start, topaz_end,
+                                     full_forecast=full_forecast, retry=False, force_update=True)
+        else:
+            print("error forecasting")
+            forecast_drift = []
+            pass
+            # Do something to warn the user
+
     #forecast_drift = []
     # Return the start and end time of the topaz file that was (maybe) downloaded, and also the forecast result
     return topaz_update, topaz_start, topaz_end, forecast_drift
@@ -355,14 +373,17 @@ def fetch_topaz_forecast(buoy_position, target_time, output_dir):
 def check_existing_topaz(topaz_age, topaz_start, topaz_end, date_start, date_end):
     """
     Check if the existing forecast file matchs the time window needs
-    :param topaz_filename: Existing Topaz filename; convention is "YYYY-MM-DD_YYYY-MM-DD_velocityfield.nc"
-    :param date_start: datetime; beginning of forecast window
-    :param date_end: datetime; end of forecast window
+    :param topaz_age: time since the last forecast download
+    :param topaz_start: datetime; beginning of existing forecast window
+    :param topaz_end: datetime; end of existing forecast window
+    :param date_start: datetime; beginning of forecast need
+    :param date_end: datetime; end of forecast need
     return true if existing topaz is usable, false if a new one must be acquired
     """
-
+    # Always update if its more than 24 hours old
     if topaz_age >= timedelta(hours=24):
         return False
+
     # If our needed window falls within the range of this file,
     #   we do not need to download a new set.
     if topaz_start <= date_start and topaz_end >= date_end:

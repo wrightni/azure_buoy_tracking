@@ -121,6 +121,8 @@ def overview():
     obs_age = current_time - last_known_point.date
     obs_age = format_timedelta(obs_age, show_seconds=False)
 
+    active_buoy = Variables.query.filter_by(key_string='primary_buoy').first().value_txt
+
     p = make_plot()
 
     script, div = components(p)
@@ -130,6 +132,7 @@ def overview():
         last_sync=time_since_update,
         lkp=last_known_point,
         obs_age=obs_age,
+        active_buoy=active_buoy,
         plot_script=script,
         plot_div=div,
         js_resources=INLINE.render_js(),
@@ -147,7 +150,7 @@ def pilot():
     last_fc_update = Variables.query.filter_by(key_string="s_update").first()
 
     # Update the forecast if its age is greater than the last data sync
-    if current_time - last_fc_update.value > timedelta(hours=.1):
+    if current_time - last_fc_update.value > timedelta(minutes=5):
         update_forecast(forecast_method='s')
 
     # last_known_point = Buoy.query.order_by(Buoy.date.desc()).limit(1)[0]
@@ -178,7 +181,7 @@ def satellite():
     # Update the forecast on user request if its age is greater than the last data sync
     if request.method == "POST":
         last_fc_update = Variables.query.filter_by(key_string="a_update").first()
-        if current_time - last_fc_update.value > timedelta(hours=0.25):
+        if current_time - last_fc_update.value > timedelta(minutes=15):
             update_forecast(forecast_method='a')
 
     # Calculate the time since the forecast was run
@@ -271,7 +274,7 @@ def update_record(current_time, throttle=15):
     obs_age = current_time - last_known_point.date
 
     # Set a new primary buoy if the current one has not reported in >5 hours
-    if obs_age > timedelta(hours=5):
+    if obs_age > timedelta(hours=2):
         # Set the age threshold to be beaten
         primary_age = obs_age
         # Set the current primary buoy

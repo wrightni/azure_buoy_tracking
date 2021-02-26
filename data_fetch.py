@@ -3,6 +3,7 @@ import json
 from datetime import timedelta, datetime
 
 from utils import xldate_to_datetime, decimaldoy_to_datetime
+from credintials import apiKey
 
 
 def fetch_data_http(source, line_length, num_lines=5):
@@ -28,7 +29,7 @@ def fetch_data_http(source, line_length, num_lines=5):
         return req.text
 
 
-def fetch_data_pgapi(source, buoy_id, start_date='02/15/2021'):
+def fetch_data_pgapi(source, buoy_id, start_date='02/25/2021'):
     """
     Downloads raw text data from the pacific gyre https api.
     Much of this is hard coded and would need to be adjusted to generalize to other PG buoys.
@@ -37,7 +38,7 @@ def fetch_data_pgapi(source, buoy_id, start_date='02/15/2021'):
     :param start_date: Date from which to download data record
     :return string: raw buoy data
     """
-    payload = {'apiKey': '892BD369-9735-4A6C-96E3-02E2E74781E5',
+    payload = {'apiKey': apiKey['osu'],
                'commIDs': buoy_id,
                'fieldList': ['DeviceDateTime', 'Latitude', 'Longitude'],
                'dateFormat': 'yyyy-MM-dd:HH:mm:ss'}
