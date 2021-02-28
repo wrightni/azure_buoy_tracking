@@ -4,6 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 import pandas as pd
 import numpy as np
 from bokeh.models import ColumnDataSource, Div, Select, Slider, TextInput, HoverTool
+from bokeh.models import Range1d
 from bokeh.resources import INLINE
 from bokeh.embed import components
 from bokeh.plotting import figure, output_file
@@ -401,7 +402,7 @@ def make_plot(forecast=None, size=(800, 800), record='full'):
         #drift_history = pd.read_sql("buoy", db.session.bind)
         last_idx = drift_history.last_valid_index()
         drift_history.sort_values(by='date', inplace=True)
-        drift_history = drift_history.iloc[last_idx-20:]
+        drift_history = drift_history.iloc[last_idx-125:]
     else:
         drift_history = pd.read_sql("select * from buoy where buoy='{}'".format(buoy_id),
                                     db.session.bind, parse_dates=['date'])
@@ -453,4 +454,11 @@ def make_plot(forecast=None, size=(800, 800), record='full'):
     p.yaxis.axis_label = "Latitude"
     p.circle('x', 'y', source=data_source, color='black', fill_alpha=0.4, size=10, legend_label='Drift History')
     p.circle('x', 'y', source=data_source_forecast, color=color, fill_alpha=0.8, size=10, legend_label=forecast_legend)
+    # Set the x and y limits
+    x_mean = np.mean(drift_history['lat'].values)
+    y_mean = np.mean(drift_history['lon'].values)
+    x_range = np.max(drift_history['lon'].values)
+    # 25km in each direction 
+    p.y_range = Range1d(x_mean-0.25, x_mean+0.25)
+    p.x_range = Range1d(y_mean-0.75, y_mean+0.75)
     return p
