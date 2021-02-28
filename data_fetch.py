@@ -29,7 +29,7 @@ def fetch_data_http(source, line_length, num_lines=5):
         return req.text
 
 
-def fetch_data_pgapi(source, buoy_id, start_date='02/25/2021'):
+def fetch_data_pgapi(source, buoy_id, start_date='02/27/2021'):
     """
     Downloads raw text data from the pacific gyre https api.
     Much of this is hard coded and would need to be adjusted to generalize to other PG buoys.

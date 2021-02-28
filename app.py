@@ -96,7 +96,7 @@ def init_tables():
         db.session.add(new_row)
     exists = Variables.query.filter_by(key_string="primary_buoy").first()
     if not exists:
-        new_primary = Variables(key_string="primary_buoy", value_txt="443910")
+        new_primary = Variables(key_string="primary_buoy", value_txt="300534061090050")
         db.session.add(new_primary)
     
     db.session.commit()
@@ -250,7 +250,7 @@ def update_primary(new_primary):
     update_forecast(forecast_method='a')
 
 
-def update_record(current_time, throttle=15):
+def update_record(current_time, throttle=5):
     '''
     :current_time: datetime object
     :throttle: Minimum time elapsed, in minutes, before new data is downloaded
@@ -301,8 +301,8 @@ def update_bouy(current_time, time_since_update, buoy_id):
     # The number of positions requested is
     #   the number of hours since the last update + 2
     n_pos = int(time_since_update.total_seconds()/(3600)) + 2
-    if n_pos > 200:
-        n_pos = 200
+    if n_pos > 20:
+        n_pos = 20
 
     # Download the most recent data from the buoy
     new_points = fetch_by_buoyid(buoy_id, n_pos=n_pos + 2)
@@ -321,8 +321,9 @@ def update_bouy(current_time, time_since_update, buoy_id):
 def update_forecast(forecast_method='s'):
 
     if forecast_method == 's':
+        update_freq = 6 # Number of updates per hour
         # Select the last 8 buoy points
-        n_pts = 8
+        n_pts = 6 * update_freq
         drift_track = [(0, 0, 0) for _ in range(n_pts)]
         
         points = query_buoy_data(n_pts=n_pts)
@@ -391,24 +392,29 @@ def update_forecast(forecast_method='s'):
     #return time_since_update
 
 
-
 def make_plot(forecast=None, size=(800, 800), record='full'):
     
     buoy_id = Variables.query.filter_by(key_string="primary_buoy").first().value_txt
     if record == 'partial':
-        drift_history = pd.read_sql("select * from buoy where buoy='{}'".format(buoy_id), db.session.bind)
+        drift_history = pd.read_sql("select * from buoy where buoy='{}'".format(buoy_id), 
+                                    db.session.bind, parse_dates=['date'])
         #drift_history = pd.read_sql("buoy", db.session.bind)
         last_idx = drift_history.last_valid_index()
         drift_history.sort_values(by='date', inplace=True)
         drift_history = drift_history.iloc[last_idx-20:]
     else:
-        drift_history = pd.read_sql("select * from buoy where buoy='{}'".format(buoy_id), db.session.bind)
+        drift_history = pd.read_sql("select * from buoy where buoy='{}'".format(buoy_id),
+                                    db.session.bind, parse_dates=['date'])
+        last_idx = drift_history.last_valid_index()
+        drift_history.sort_values(by='date', inplace=True)
+        drift_history = drift_history.iloc[last_idx-125:]
         #drift_history = pd.read_sql("buoy", db.session.bind)
 
     # If requested to show the forecast, read that data and plot it in red.
     # Otherwise just plot the latest point in red. 
     if forecast is not None:
-        drift_forecast = pd.read_sql("select * from forecast where method='{}'".format(forecast), db.session.bind)
+        drift_forecast = pd.read_sql("select * from forecast where method='{}'".format(forecast), 
+                                     db.session.bind, parse_dates=['date'])
         lat_fc = drift_forecast.lat
         lon_fc = drift_forecast.lon
         date_fc = drift_forecast.date
@@ -416,7 +422,7 @@ def make_plot(forecast=None, size=(800, 800), record='full'):
         forecast_legend = 'Forecast Track'
         color = Set1[3][1]
     else:
-        index = drift_history.id.idxmax()
+        index = drift_history.date.idxmax()
         lat_fc = [drift_history.lat[index]]
         lon_fc = [drift_history.lon[index]]
         date_fc = [drift_history.date[index]]
