@@ -29,7 +29,7 @@ def fetch_data_http(source, line_length, num_lines=5):
         return req.text
 
 
-def fetch_data_pgapi(source, buoy_id, start_date='02/27/2021'):
+def fetch_data_pgapi(source, buoy_id, start_date='03/01/2021'):
     """
     Downloads raw text data from the pacific gyre https api.
     Much of this is hard coded and would need to be adjusted to generalize to other PG buoys.
@@ -130,11 +130,14 @@ def fetch_by_buoyid(buoy_id, n_pos=5):
 
     # Download the raw data from the source
     if buoy_type == 'PacificGyre':
-        # Not passing n_pos will default start_date to 03/15/2020
+        # Not passing n_pos will default start_date to 03/1/2021
         if n_pos is None:
             data = fetch_data_pgapi(data_url, buoy_id)      # This is returned in reverse order...
         else:
-            start_date = datetime.utcnow() - timedelta(hours=24)
+            n_hours = int(n_pos / 144)  # 144 pts per hour @10 min update
+            if n_hours < 2:
+                n_hours = 2
+            start_date = datetime.utcnow() - timedelta(hours=n_hours)
             start_date = start_date.strftime("%m/%d/%Y")
             data = fetch_data_pgapi(data_url, buoy_id, start_date=start_date)
         reverse = True

@@ -9,6 +9,7 @@ from bokeh.resources import INLINE
 from bokeh.embed import components
 from bokeh.plotting import figure, output_file
 from bokeh.palettes import Greys6, Set1
+from bokeh.tile_providers import CARTODBPOSITRON, get_provider
 #from bokeh.transform import factor_cmap
 from datetime import datetime, timedelta
 from forecast_position import simple_forecast, advanced_forecast
@@ -124,6 +125,8 @@ def overview():
 
     active_buoy = Variables.query.filter_by(key_string='primary_buoy').first().value_txt
 
+    drift_history = query_buoy_data(n_pts='all')
+
     p = make_plot()
 
     script, div = components(p)
@@ -134,6 +137,7 @@ def overview():
         lkp=last_known_point,
         obs_age=obs_age,
         active_buoy=active_buoy,
+        drift_history=drift_history,
         plot_script=script,
         plot_div=div,
         js_resources=INLINE.render_js(),
@@ -202,7 +206,7 @@ def satellite():
 
     active_buoy = Variables.query.filter_by(key_string='primary_buoy').first().value_txt
 
-    p = make_plot(forecast='a', size=(600, 600), record='full')
+    p = make_plot(forecast='a', size=(600, 600), record='partial')
 
     script, div = components(p)
     return render_template(
@@ -229,6 +233,8 @@ def query_buoy_data(n_pts=1):
     # If only 1 point was requested, return as an item instead of a list with len=1
     if n_pts == 1:
         return Buoy.query.filter_by(buoy=primary_buoy).order_by(Buoy.date.desc()).limit(n_pts)[0]
+    elif n_pts == 'all':
+        return Buoy.query.filter_by(buoy=primary_buoy).order_by(Buoy.date.desc())
     else:
         return Buoy.query.filter_by(buoy=primary_buoy).order_by(Buoy.date.desc()).limit(n_pts)
 
@@ -300,13 +306,16 @@ def update_bouy(current_time, time_since_update, buoy_id):
     Updates the database with new buoy positions for a single target.
     """
     # The number of positions requested is
-    #   the number of hours since the last update + 2
-    n_pos = int(time_since_update.total_seconds()/(3600)) + 2
-    if n_pos > 20:
-        n_pos = 20
-
+    #   the number of hours since the last update * 6 (10min update)
+    n_pos = int(time_since_update.total_seconds()/(3600)) * 6
+    
+    # Max download of 8 days, 6 updates per hour
+    if n_pos > 8 * 24 * 6:
+        n_pos = 8 * 24 * 6
+    if n_pos < 2:
+        n_pos = 2
     # Download the most recent data from the buoy
-    new_points = fetch_by_buoyid(buoy_id, n_pos=n_pos + 2)
+    new_points = fetch_by_buoyid(buoy_id, n_pos=n_pos)
 
     # Add any buoy points to the DB if they do not already exist
     for pos_time, lat, lon in new_points:
@@ -324,7 +333,7 @@ def update_forecast(forecast_method='s'):
     if forecast_method == 's':
         update_freq = 6 # Number of updates per hour
         # Select the last 8 buoy points
-        n_pts = 6 * update_freq
+        n_pts = 8 * update_freq
         drift_track = [(0, 0, 0) for _ in range(n_pts)]
         
         points = query_buoy_data(n_pts=n_pts)
@@ -388,9 +397,6 @@ def update_forecast(forecast_method='s'):
     last_update = Variables.query.filter_by(key_string='{}_update'.format(forecast_method)).first()
     last_update.value = datetime.utcnow()
     db.session.commit()
-    # Set time since update to 0
-    #time_since_update = timedelta(hours=0)
-    #return time_since_update
 
 
 def make_plot(forecast=None, size=(800, 800), record='full'):
@@ -402,13 +408,13 @@ def make_plot(forecast=None, size=(800, 800), record='full'):
         #drift_history = pd.read_sql("buoy", db.session.bind)
         last_idx = drift_history.last_valid_index()
         drift_history.sort_values(by='date', inplace=True)
-        drift_history = drift_history.iloc[last_idx-125:]
+        drift_history = drift_history.iloc[last_idx-144:]
     else:
         drift_history = pd.read_sql("select * from buoy where buoy='{}'".format(buoy_id),
                                     db.session.bind, parse_dates=['date'])
         last_idx = drift_history.last_valid_index()
         drift_history.sort_values(by='date', inplace=True)
-        drift_history = drift_history.iloc[last_idx-125:]
+        # drift_history = drift_history.iloc[last_idx-375:]
         #drift_history = pd.read_sql("buoy", db.session.bind)
 
     # If requested to show the forecast, read that data and plot it in red.
@@ -448,17 +454,12 @@ def make_plot(forecast=None, size=(800, 800), record='full'):
                                             method=method_fc
                                             ))
 
-    p = figure(title="Drift History", sizing_mode="fixed", 
-               plot_width=size[0], plot_height=size[1], tools=["pan,wheel_zoom,box_zoom,reset", ht])
+    p = figure(title="Drift History", sizing_mode="scale_both", aspect_ratio=3,
+               tools=["pan,wheel_zoom,box_zoom,reset", ht])
+
     p.xaxis.axis_label = "Longitude"
     p.yaxis.axis_label = "Latitude"
     p.circle('x', 'y', source=data_source, color='black', fill_alpha=0.4, size=10, legend_label='Drift History')
     p.circle('x', 'y', source=data_source_forecast, color=color, fill_alpha=0.8, size=10, legend_label=forecast_legend)
-    # Set the x and y limits
-    x_mean = np.mean(drift_history['lat'].values)
-    y_mean = np.mean(drift_history['lon'].values)
-    x_range = np.max(drift_history['lon'].values)
-    # 25km in each direction 
-    p.y_range = Range1d(x_mean-0.25, x_mean+0.25)
-    p.x_range = Range1d(y_mean-0.75, y_mean+0.75)
+
     return p
