@@ -134,11 +134,11 @@ def fetch_by_buoyid(buoy_id, n_pos=5):
         if n_pos is None:
             data = fetch_data_pgapi(data_url, buoy_id)      # This is returned in reverse order...
         else:
-            n_hours = int(n_pos / 144)  # 144 pts per hour @10 min update
+            n_hours = int(n_pos / 6)  # 144 pts per hour @10 min update
             if n_hours < 2:
                 n_hours = 2
             start_date = datetime.utcnow() - timedelta(hours=n_hours)
-            start_date = start_date.strftime("%m/%d/%Y")
+            start_date = start_date.strftime("%m-%d-%Y %H:%M")
             data = fetch_data_pgapi(data_url, buoy_id, start_date=start_date)
         reverse = True
     # elif data_url.split(':')[0] == 'ftp':
