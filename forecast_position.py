@@ -355,7 +355,7 @@ def fetch_topaz_forecast(buoy_position, target_time, output_dir):
     username = credintials.login['topaz_username']
     password = credintials.login['topaz_password']
 
-    cmd = ("python3 -m motuclient --motu http://nrt.cmems-du.eu/motu-web/Motu "
+    cmd = ("python3 -m motuclient --motu https://nrt.cmems-du.eu/motu-web/Motu "
            "--service-id ARCTIC_ANALYSIS_FORECAST_PHYS_002_001_a-TDS "
            "--product-id dataset-topaz4-arc-1hr-myoceanv2-be "
            "--longitude-min {} --longitude-max {} --latitude-min {} --latitude-max {} "

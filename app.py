@@ -314,6 +314,8 @@ def update_bouy(current_time, time_since_update, buoy_id):
         n_pos = 8 * 24 * 6
     if n_pos < 2:
         n_pos = 2
+
+    n_pos = None
     # Download the most recent data from the buoy
     new_points = fetch_by_buoyid(buoy_id, n_pos=n_pos)
 
