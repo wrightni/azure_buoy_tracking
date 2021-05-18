@@ -6,66 +6,64 @@
 
 <div class="container">
   <div class="row">
-    <div class="col">
-      <h2>Last Known Position</h2>
-      <table class="table table-sm">
-        <thead>
-          <tr>
-            <th scope="col">Time</th>
-            <th scope="col">Latitude</th>
-            <th scope="col">Longitude</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>{{ lkp.date|timezone_conversion }} AKST</td>
-            <td>{{ lkp.lat|round(5) }}</td>
-            <td>{{ lkp.lon|round(5) }}</td>
-          </tr>
-        </tbody>
-      </table>
+    <h2>Last Known Position</h2>
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th scope="col">Time</th>
+          <th scope="col">Latitude</th>
+          <th scope="col">Longitude</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ lkp.date|timezone_conversion }} AKST</td>
+          <td>{{ lkp.lat|round(5) }}</td>
+          <td>{{ lkp.lon|round(5) }}</td>
+        </tr>
+      </tbody>
+    </table>
 
-      <h2>Drift Forecast</h2>
-      <table class="table table-sm sortable">
-        <thead>
-          <tr>
-            <th scope="col">Time</th>
-            <th scope="col">Latitude</th>
-            <th scope="col">Longitude</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for point in fc_points %}
-          <tr>
-            <td>{{ point.date|timezone_conversion }} AKST</td>
-            <td>{{ point.lat|round(5) }}</td>
-            <td>{{ point.lon|round(5) }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <h2>Drift Forecast</h2>
+    <table class="table table-sm sortable">
+      <thead>
+        <tr>
+          <th scope="col">Time</th>
+          <th scope="col">Latitude</th>
+          <th scope="col">Longitude</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for point in fc_points %}
+        <tr>
+          <td>{{ point.date|timezone_conversion }} AKST</td>
+          <td>{{ point.lat|round(5) }}</td>
+          <td>{{ point.lon|round(5) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="row">
+    <div class="container">
+      <br/>
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Document</title>
+          {{ js_resources|indent(4)|safe }}
+          {{ css_resources|indent(4)|safe }}
+          {{ plot_script|indent(4)|safe }}
+      </head>
+      <body>
+          <div style="display: flex; justify-content: center;">
+              {{ plot_div|indent(4)|safe }}
+          </div>
+      </body>
     </div>
-    <div class="col">
-      <div class="container">
-        <br/>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Document</title>
-            {{ js_resources|indent(4)|safe }}
-            {{ css_resources|indent(4)|safe }}
-            {{ plot_script|indent(4)|safe }}
-        </head>
-        <body>
-            <div style="display: flex; justify-content: center;">
-                {{ plot_div|indent(4)|safe }}
-            </div>
-        </body>
-      </div>
-      <figure class="text-center">
-        <p><small>Note: Plot tooltip times are in UTC</small></p>
-      </figure>
-    </div>
+    <figure class="text-center">
+      <p><small>Note: Plot tooltip times are in UTC</small></p>
+    </figure>
   </div>
 </div>
 

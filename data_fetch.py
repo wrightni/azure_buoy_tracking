@@ -3,6 +3,7 @@ import json
 from datetime import timedelta, datetime
 
 from utils import xldate_to_datetime, decimaldoy_to_datetime
+from credintials import apiKey
 
 
 def fetch_data_http(source, line_length, num_lines=5):
@@ -28,7 +29,7 @@ def fetch_data_http(source, line_length, num_lines=5):
         return req.text
 
 
-def fetch_data_pgapi(source, buoy_id, start_date='02/15/2021'):
+def fetch_data_pgapi(source, buoy_id, start_date='03/01/2021'):
     """
     Downloads raw text data from the pacific gyre https api.
     Much of this is hard coded and would need to be adjusted to generalize to other PG buoys.
@@ -37,7 +38,7 @@ def fetch_data_pgapi(source, buoy_id, start_date='02/15/2021'):
     :param start_date: Date from which to download data record
     :return string: raw buoy data
     """
-    payload = {'apiKey': '892BD369-9735-4A6C-96E3-02E2E74781E5',
+    payload = {'apiKey': apiKey['osu'],
                'commIDs': buoy_id,
                'fieldList': ['DeviceDateTime', 'Latitude', 'Longitude'],
                'dateFormat': 'yyyy-MM-dd:HH:mm:ss'}
@@ -129,12 +130,15 @@ def fetch_by_buoyid(buoy_id, n_pos=5):
 
     # Download the raw data from the source
     if buoy_type == 'PacificGyre':
-        # Not passing n_pos will default start_date to 03/15/2020
+        # Not passing n_pos will default start_date to 03/1/2021
         if n_pos is None:
             data = fetch_data_pgapi(data_url, buoy_id)      # This is returned in reverse order...
         else:
-            start_date = datetime.utcnow() - timedelta(hours=24)
-            start_date = start_date.strftime("%m/%d/%Y")
+            n_hours = int(n_pos / 6)  # 144 pts per hour @10 min update
+            if n_hours < 2:
+                n_hours = 2
+            start_date = datetime.utcnow() - timedelta(hours=n_hours)
+            start_date = start_date.strftime("%m-%d-%Y %H:%M")
             data = fetch_data_pgapi(data_url, buoy_id, start_date=start_date)
         reverse = True
     # elif data_url.split(':')[0] == 'ftp':

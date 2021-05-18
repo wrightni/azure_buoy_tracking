@@ -1,6 +1,10 @@
 {
-    "443910": {
-        "source": "http://18.188.91.46/data/SIMB3_443910.csv", 
-        "type": "SIMB"
+    "300534061090050": 
+        {"source": "https://api.pacificgyre.com/api2/getData.aspx", 
+        "type": "PacificGyre"
+    },
+    "300534061095090": 
+        {"source": "https://api.pacificgyre.com/api2/getData.aspx", 
+        "type": "PacificGyre"
     }
-}
+} 
