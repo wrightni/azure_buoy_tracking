@@ -226,7 +226,7 @@ def update_record(current_time, last_update):
     except:
         # Return last update as given if this update fails
         return last_update
-    
+
 
 def update_forecast(last_update, forecast_method='s'):
 

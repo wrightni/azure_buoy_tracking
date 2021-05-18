@@ -57,7 +57,7 @@ def simple_forecast(target_time, drift_track, full_forecast=False):
     # This rounding means the forecast lead time is only accurate to the step size
     num_steps = int(lead_time.total_seconds() / step_length)
 
-    forecast_drift = [(0,0,0) for _ in range(int(num_steps/4))]
+    forecast_drift = [(0, 0, 0) for _ in range(int(num_steps/4))]
 
     # Determine the distance and direction traveled for each step
     d_per_step = np.average(motion_record[:, 0]) * step_length
@@ -284,11 +284,11 @@ def local_grid_bounds_check(big_grid, idx, lgs):
     if a < 0:
         a = 0
     if b >= xmax:
-        b = xmax-1
+        b = xmax - 1
     if i < 0:
         i = 0
     if j >= ymax:
-        j = ymax-1
+        j = ymax - 1
 
     return a, b, i, j
 
