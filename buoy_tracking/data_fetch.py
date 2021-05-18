@@ -2,8 +2,8 @@ import requests
 import json
 from datetime import timedelta, datetime
 
-from utils import xldate_to_datetime, decimaldoy_to_datetime
-from credintials import apiKey
+from buoy_tracking.utils import xldate_to_datetime, decimaldoy_to_datetime
+from buoy_tracking.credentials import API_KEY
 
 
 def fetch_data_http(source, line_length, num_lines=5):
@@ -29,16 +29,20 @@ def fetch_data_http(source, line_length, num_lines=5):
         return req.text
 
 
-def fetch_data_pgapi(source, buoy_id, start_date='03/01/2021'):
+def fetch_data_pgapi(source, buoy_id, start_date='03/01/2021', provider='osu'):
     """
     Downloads raw text data from the pacific gyre https api.
     Much of this is hard coded and would need to be adjusted to generalize to other PG buoys.
     :param source: url of buoy data file
     :param buoy_id: IMEI of the buoy
     :param start_date: Date from which to download data record
+    :param provider: API_KEY name associated with this request (must be stored in credentials.py)
     :return string: raw buoy data
     """
-    payload = {'apiKey': apiKey['osu'],
+    if not provider in API_KEY:
+        raise KeyError('API KEY not found')
+
+    payload = {'apiKey': API_KEY[provider],
                'commIDs': buoy_id,
                'fieldList': ['DeviceDateTime', 'Latitude', 'Longitude'],
                'dateFormat': 'yyyy-MM-dd:HH:mm:ss'}

@@ -8,7 +8,7 @@ import netCDF4 as ncdf
 from pyproj import Transformer
 
 import geo_tools
-import credintials
+from buoy_tracking import credentials
 
 
 def simple_forecast(target_time, drift_track, full_forecast=False):
@@ -352,8 +352,8 @@ def fetch_topaz_forecast(buoy_position, target_time, output_dir):
     date_max = date_end + timedelta(hours=25)
     output_filename = '{}_{}_velocityfield.nc'.format(datetime.strftime(date_min, "%Y-%m-%d"), 
                                                       datetime.strftime(date_max, "%Y-%m-%d"))
-    username = credintials.login['topaz_username']
-    password = credintials.login['topaz_password']
+    username = credentials.LOGIN['topaz_username']
+    password = credentials.LOGIN['topaz_password']
 
     cmd = ("python3 -m motuclient --motu https://nrt.cmems-du.eu/motu-web/Motu "
            "--service-id ARCTIC_ANALYSIS_FORECAST_PHYS_002_001_a-TDS "

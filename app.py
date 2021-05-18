@@ -12,9 +12,10 @@ from bokeh.palettes import Greys6, Set1
 from bokeh.tile_providers import CARTODBPOSITRON, get_provider
 #from bokeh.transform import factor_cmap
 from datetime import datetime, timedelta
-from forecast_position import simple_forecast, advanced_forecast
-from data_fetch import fetch_by_buoyid
-from utils import format_timedelta
+
+from buoy_tracking import forecast_position as fcp # import simple_forecast, advanced_forecast
+from buoy_tracking import data_fetch # import fetch_by_buoyid
+from buoy_tracking.utils import format_timedelta
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
@@ -314,7 +315,7 @@ def update_bouy(current_time, time_since_update, buoy_id):
         n_pos = None
 
     # Download the most recent data from the buoy
-    new_points = fetch_by_buoyid(buoy_id, n_pos=n_pos)
+    new_points = data_fetch.fetch_by_buoyid(buoy_id, n_pos=n_pos)
 
     # Add any buoy points to the DB if they do not already exist
     for pos_time, lat, lon in new_points:
@@ -345,7 +346,7 @@ def update_forecast(forecast_method='s'):
             i -= 1
 
         init_time = datetime.utcnow()
-        forecast_position = simple_forecast(init_time+timedelta(hours=6), drift_track, full_forecast=True)
+        forecast_position = fcp.simple_forecast(init_time+timedelta(hours=6), drift_track, full_forecast=True)
     
     elif forecast_method == 'a':
         topaz_start_entry = Variables.query.filter_by(key_string="topaz_start").first()
@@ -362,12 +363,12 @@ def update_forecast(forecast_method='s'):
         topaz_age = datetime.utcnow() - last_topaz_update.value
 
         [topaz_update, topaz_start, 
-        topaz_end, forecast_position] = advanced_forecast(last_known_point,
-                                                          lkp.date+timedelta(hours=96),
-                                                          topaz_age,
-                                                          topaz_start_entry.value,
-                                                          topaz_end_entry.value,
-                                                          full_forecast=True)
+        topaz_end, forecast_position] = fcp.advanced_forecast(last_known_point,
+                                                              lkp.date+timedelta(hours=96),
+                                                              topaz_age,
+                                                              topaz_start_entry.value,
+                                                              topaz_end_entry.value,
+                                                              full_forecast=True)
 
         if topaz_update:
             tu = Variables.query.filter_by(key_string="topaz_update").first()

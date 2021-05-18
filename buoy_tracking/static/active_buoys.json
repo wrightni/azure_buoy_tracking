@@ -1,10 +1,12 @@
 {
     "300534061090050": 
         {"source": "https://api.pacificgyre.com/api2/getData.aspx", 
-        "type": "PacificGyre"
+        "type": "PacificGyre",
+        "provider": "osu"
     },
     "300534061095090": 
         {"source": "https://api.pacificgyre.com/api2/getData.aspx", 
-        "type": "PacificGyre"
+        "type": "PacificGyre",
+        "provider": "osu"
     }
 } 
