@@ -1,3 +1,5 @@
+from distutils.ccompiler import new_compiler
+from os.path import join, dirname
 import json
 from flask import Flask, render_template, request, redirect
 from flask_sqlalchemy import SQLAlchemy
@@ -16,6 +18,8 @@ from datetime import datetime, timedelta
 from buoy_tracking import forecast_position as fcp # import simple_forecast, advanced_forecast
 from buoy_tracking import data_fetch # import fetch_by_buoyid
 from buoy_tracking.utils import format_timedelta
+
+BUOYS_FILE = join(dirname(__file__), "buoy_tracking", "static", "active_buoys.json")
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
@@ -99,7 +103,7 @@ def init_tables():
         db.session.add(new_row)
     exists = Variables.query.filter_by(key_string="primary_buoy").first()
     if not exists:
-        new_primary = Variables(key_string="primary_buoy", value_txt="300534061090050")
+        new_primary = Variables(key_string="primary_buoy", value_txt="300434064052460")
         db.session.add(new_primary)
     
     db.session.commit()
@@ -126,7 +130,7 @@ def overview():
 
     active_buoy = Variables.query.filter_by(key_string='primary_buoy').first().value_txt
 
-    drift_history = query_buoy_data(n_pts='all')
+    drift_history = query_buoy_data(n_pts=100)
 
     p = make_plot()
 
@@ -231,6 +235,7 @@ def query_buoy_data(n_pts=1):
     Limits query to most recent n_pts
     '''
     primary_buoy = Variables.query.filter_by(key_string="primary_buoy").first().value_txt
+
     # If only 1 point was requested, return as an item instead of a list with len=1
     if n_pts == 1:
         return Buoy.query.filter_by(buoy=primary_buoy).order_by(Buoy.date.desc()).limit(n_pts)[0]
@@ -271,22 +276,26 @@ def update_record(current_time, throttle=5):
         return
    
     # Read in each active buoy
-    with open("static/active_buoys.json", 'r') as fhandle:
+    with open(BUOYS_FILE, 'r') as fhandle:
         active_buoys = json.load(fhandle)
 
     # Update the database with new data for each active buoy
     for buoy in active_buoys:
         update_bouy(current_time, time_since_update, buoy)
 
+    exists = Variables.query.filter_by(key_string="primary_buoy").first()
+    if exists.value_txt is None:
+        update_primary("300434064052460")
+    
     last_known_point = query_buoy_data()
     obs_age = current_time - last_known_point.date
 
-    # Set a new primary buoy if the current one has not reported in >5 hours
-    if obs_age > timedelta(hours=2):
+    # Set a new primary buoy if the current one has not reported in >10 hours
+    if obs_age > timedelta(hours=10) and len(active_buoys) > 1:
         # Set the age threshold to be beaten
         primary_age = obs_age
         # Set the current primary buoy
-        primary_buoy = Variables.query.filter_by(key_string="primary_buoy").first().value
+        primary_buoy = Variables.query.filter_by(key_string="primary_buoy").first().value_txt
         # Search for a bouy that has the lowest obs_age
         for buoy in active_buoys:
             last_known_point = Buoy.query.filter_by(buoy=buoy).order_by(Buoy.date.desc()).limit(1)[0]
@@ -308,7 +317,7 @@ def update_bouy(current_time, time_since_update, buoy_id):
     """
     # The number of positions requested is
     #   the number of hours since the last update * 6 (10min update)
-    n_pos = int(time_since_update.total_seconds()/(3600)) * 6
+    n_pos = int(time_since_update.total_seconds()/(3600))
     
     # If it has been more than 8 days, redownload whole record
     if n_pos > 8 * 144:
@@ -362,13 +371,17 @@ def update_forecast(forecast_method='s'):
         last_topaz_update = Variables.query.filter_by(key_string="topaz_update").first()
         topaz_age = datetime.utcnow() - last_topaz_update.value
 
-        [topaz_update, topaz_start, 
-        topaz_end, forecast_position] = fcp.advanced_forecast(last_known_point,
+        [forecast_position, topaz_update, 
+        topaz_start, topaz_end] = fcp.advanced_forecast(last_known_point,
                                                               lkp.date+timedelta(hours=96),
-                                                              topaz_age,
-                                                              topaz_start_entry.value,
-                                                              topaz_end_entry.value,
-                                                              full_forecast=True)
+                                                              #topaz_age,
+                                                              #topaz_start_entry.value,
+                                                              #topaz_end_entry.value,
+                                                              full_forecast=True,
+                                                              return_topaz_stats=True)
+        
+        # advanced_forecast(buoy_position, target_time, full_forecast=False, 
+        #               retry=True, force_update=False, return_topaz_stats=False)
 
         if topaz_update:
             tu = Variables.query.filter_by(key_string="topaz_update").first()
@@ -403,17 +416,18 @@ def make_plot(forecast=None, size=(800, 800), record='full'):
     
     buoy_id = Variables.query.filter_by(key_string="primary_buoy").first().value_txt
     if record == 'partial':
-        drift_history = pd.read_sql("select * from buoy where buoy='{}'".format(buoy_id), 
+        drift_history = pd.read_sql("select * from buoy where buoy='{}' and lat != 0".format(buoy_id), 
                                     db.session.bind, parse_dates=['date'])
         #drift_history = pd.read_sql("buoy", db.session.bind)
         last_idx = drift_history.last_valid_index()
         drift_history.sort_values(by='date', inplace=True)
-        drift_history = drift_history.iloc[last_idx-144:]
+        drift_history = drift_history.iloc[last_idx-50:]
     else:
-        drift_history = pd.read_sql("select * from buoy where buoy='{}'".format(buoy_id),
+        drift_history = pd.read_sql("select * from buoy where buoy='{}' and lat != 0".format(buoy_id),
                                     db.session.bind, parse_dates=['date'])
         last_idx = drift_history.last_valid_index()
         drift_history.sort_values(by='date', inplace=True)
+        drift_history = drift_history.iloc[last_idx-200:]
         # drift_history = drift_history.iloc[last_idx-375:]
         #drift_history = pd.read_sql("buoy", db.session.bind)
 
