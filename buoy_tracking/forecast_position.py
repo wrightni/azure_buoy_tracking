@@ -1,14 +1,21 @@
 import os
-import sys
+import glob
 from datetime import datetime, timedelta
-
+import logging
 import numpy as np
 from scipy import interpolate
 import netCDF4 as ncdf
 from pyproj import Transformer
 
-import geo_tools
+from buoy_tracking import geo_tools
 from buoy_tracking import credentials
+
+
+TOPAZ_PATH = (os.path.join(os.path.dirname(__file__), "topaz"))
+TOPAZ_DATETIME_FORMAT = "%Y-%m-%d-%H"
+
+logging.basicConfig(filename='tasking.log', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def simple_forecast(target_time, drift_track, full_forecast=False):
@@ -86,30 +93,51 @@ def simple_forecast(target_time, drift_track, full_forecast=False):
         return forecast_drift[-1]
 
 
-def advanced_forecast(buoy_position, target_time, 
-                      topaz_age, topaz_start, topaz_end, 
-                      full_forecast=False, retry=True, force_update=True):
+def advanced_forecast(buoy_position, target_time, full_forecast=False, 
+                      retry=True, force_update=False, return_topaz_stats=False):
 
     # To track the time since last topaz download
     #    return true if the data was refreshed, false otherwise
     topaz_update = False
-    # Reconstruct the topaz filename from the stored start and end time
-    topaz_filename = '{}/topaz/{}_{}_velocityfield.nc'.format(sys.path[0],
-                                                               datetime.strftime(topaz_start, "%Y-%m-%d"), 
-                                                               datetime.strftime(topaz_end, "%Y-%m-%d"))
+    valid_file = None
 
-    # Returns True if the needed time window falls entirely within the existing topaz data range
-    existing_valid = check_existing_topaz(topaz_age, topaz_start, topaz_end,
-                                          buoy_position[0], target_time)
+    topaz_files = glob.glob(os.path.join(TOPAZ_PATH, '*.nc'))
+    
+    # Search for a valid existing forecast
+    for topaz_filename in topaz_files:
+        # Reconstruct the topaz start/end times from the stored filename
+        topaz_start = datetime.strptime(os.path.basename(topaz_filename).split('_')[0],
+                                        TOPAZ_DATETIME_FORMAT)
 
-    if not existing_valid or force_update:
-        # Delete the existing data if it exists
-        try:
-            os.remove(topaz_filename)
-        except FileNotFoundError:
-            pass
-        topaz_filename, topaz_start, topaz_end = fetch_topaz_forecast(buoy_position, target_time, "{}/topaz".format(sys.path[0]))
+        topaz_end = datetime.strptime(os.path.basename(topaz_filename).split('_')[1],
+                                        TOPAZ_DATETIME_FORMAT)
+
+        # Returns True if the needed time window falls entirely within the existing topaz data range
+        existing_valid = check_existing_topaz(topaz_start, topaz_end,
+                                              buoy_position[0], target_time)
+
+        if not existing_valid or force_update:
+            # Delete the existing data if it exists
+            try:
+                os.remove(topaz_filename)
+            except FileNotFoundError:
+                pass
+            except PermissionError:
+                pass
+        else:
+            valid_file = topaz_filename
+            valid_start = topaz_start
+            valid_end = topaz_end
+
+    # If no valid file was found, download a new one.
+    #   If we found a valid file, recall stored variables
+    if valid_file is None:
+        topaz_filename, topaz_start, topaz_end = fetch_topaz_forecast(buoy_position, target_time, TOPAZ_PATH)
         topaz_update = True
+    else:
+        topaz_filename = valid_file
+        topaz_start = valid_start
+        topaz_end = valid_end
 
     # Load the variables from the file
     topaz_vars = load_topaz_vars(topaz_filename)
@@ -121,17 +149,20 @@ def advanced_forecast(buoy_position, target_time,
         # This happens when the buoy position falls out of the model ROI bounds
         # Retry with a forced update
         if retry and not topaz_update:
-            return advanced_forecast(buoy_position, target_time, topaz_age, topaz_start, topaz_end,
+            # output warning to log?
+            return advanced_forecast(buoy_position, target_time,
                                      full_forecast=full_forecast, retry=False, force_update=True)
         else:
-            print("error forecasting")
-            forecast_drift = []
+            logger.error("Error using advanced forecast")
+            forecast_drift = [buoy_position]
             pass
             # Do something to warn the user
 
-    #forecast_drift = []
     # Return the start and end time of the topaz file that was (maybe) downloaded, and also the forecast result
-    return topaz_update, topaz_start, topaz_end, forecast_drift
+    if return_topaz_stats:
+        return forecast_drift, topaz_update, topaz_start, topaz_end
+    else:
+        return forecast_drift
 
 
 def _advanced_forecast(buoy_position, target_time, topaz_vars, full_forecast=False):
@@ -168,6 +199,13 @@ def _advanced_forecast(buoy_position, target_time, topaz_vars, full_forecast=Fal
     # Find the index of the grid cell with the smallest difference from the buoy lat/lon
     ll_idx = np.unravel_index((np.abs(lons - buoy_lon) + np.abs(lats - buoy_lat)).argmin(),
                               np.shape(lons))
+
+    # If the first value is masked, they all are as mask is based on geography
+    #  This covers when buoy drifts out of forecast realm (e.g. washes ashore)
+    if u[t0, ll_idx[0], ll_idx[1]] is np.ma.masked:
+        logger.warning("Buoy likely outside region of interest")
+        logger.error("Advanced forecast requested masked location")
+        return([buoy_position])
 
     # Trim the u/v grids to a local window around the buoy location
     # Local grid size (in each direction from center), 12km gridcell = 1 cells per 12hr at 1km/hr
@@ -346,43 +384,39 @@ def fetch_topaz_forecast(buoy_position, target_time, output_dir):
     # If no existing file was found, download a new one.
     # Select the date range as the needed window, plus a buffer.
     #   This makes it more likely that future forecasts will be able to reuse this data file
-    date_min = date_start - timedelta(hours=4)
+    date_min = date_start - timedelta(hours=24)
     # Don't want to add too much time here, because the forecast skill drops off with increased
     #   lead times. I.e. we want to be redownloading this file every day or two.
-    date_max = date_end + timedelta(hours=25)
-    output_filename = '{}_{}_velocityfield.nc'.format(datetime.strftime(date_min, "%Y-%m-%d"), 
-                                                      datetime.strftime(date_max, "%Y-%m-%d"))
+    date_max = date_end + timedelta(hours=24)
+    output_filename = '{}_{}_velocityfield.nc'.format(datetime.strftime(date_min, TOPAZ_DATETIME_FORMAT), 
+                                                      datetime.strftime(date_max, TOPAZ_DATETIME_FORMAT))
     username = credentials.LOGIN['topaz_username']
     password = credentials.LOGIN['topaz_password']
 
-    cmd = ("python3 -m motuclient --motu https://nrt.cmems-du.eu/motu-web/Motu "
+    cmd = ("python -m motuclient --motu https://nrt.cmems-du.eu/motu-web/Motu "
            "--service-id ARCTIC_ANALYSIS_FORECAST_PHYS_002_001_a-TDS "
            "--product-id dataset-topaz4-arc-1hr-myoceanv2-be "
-           "--longitude-min {} --longitude-max {} --latitude-min {} --latitude-max {} "
-           "--date-min '{}' --date-max '{}' "
+           "--longitude-min -180 --longitude-max 180 --latitude-min 68 --latitude-max 90 "
+           '--date-min "{}" --date-max "{}" '
            "--variable latitude --variable longitude --variable uice --variable vice "
            "--out-dir {} --out-name {} "
-           "--user '{}' --pwd '{}'").format(lon_min, lon_max, lat_min, lat_max,
+           "--user {} --pwd {}").format(#lon_min, lon_max, lat_min, lat_max,
                                             date_min, date_max, output_dir,
                                             output_filename, username, password)
-    # print(cmd)
+
     os.system(cmd)
     return os.path.join(output_dir, output_filename), date_min, date_max
 
 
-def check_existing_topaz(topaz_age, topaz_start, topaz_end, date_start, date_end):
+def check_existing_topaz(topaz_start, topaz_end, date_start, date_end):
     """
     Check if the existing forecast file matchs the time window needs
-    :param topaz_age: time since the last forecast download
     :param topaz_start: datetime; beginning of existing forecast window
     :param topaz_end: datetime; end of existing forecast window
     :param date_start: datetime; beginning of forecast need
     :param date_end: datetime; end of forecast need
     return true if existing topaz is usable, false if a new one must be acquired
     """
-    # Always update if its more than 24 hours old
-    if topaz_age >= timedelta(hours=24):
-        return False
 
     # If our needed window falls within the range of this file,
     #   we do not need to download a new set.
@@ -394,7 +428,7 @@ def check_existing_topaz(topaz_age, topaz_start, topaz_end, date_start, date_end
 
 def calc_latlon_window(lat, lon, forecast_hours):
 
-    # Assume maximum average drift of 1km/hr
+    # Assume maximum average drift of 4km/hr
     max_distance_km = float(forecast_hours * 4)
     max_distance_deglat = max_distance_km / 111.0     # 1 degree lat is about 111km at 70N
     max_distance_deglon = max_distance_km / 36.0      # 1 degree lon is about 36km at 70.7N

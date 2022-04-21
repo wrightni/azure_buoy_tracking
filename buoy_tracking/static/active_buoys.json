@@ -1,12 +1,6 @@
 {
-    "300534061090050": 
-        {"source": "https://api.pacificgyre.com/api2/getData.aspx", 
-        "type": "PacificGyre",
-        "provider": "osu"
-    },
-    "300534061095090": 
-        {"source": "https://api.pacificgyre.com/api2/getData.aspx", 
-        "type": "PacificGyre",
-        "provider": "osu"
+    "300434064052460":
+        {"source": "https://app.cryosphereinnovation.com/sbd_data/SIMB3_052460.csv",
+        "type": "SIMB"
     }
-} 
+}

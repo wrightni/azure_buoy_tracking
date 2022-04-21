@@ -1,18 +1,45 @@
 {
-    "SIMB": {
-      "t_col": 2,
-      "lat_col": 3,
-      "lon_col": 4,
-      "line_len": 1410,
-      "date_fmt": "xl",
-      "delim": ","
-    },
-    "PacificGyre": {
-        "t_col": 2,
-        "lat_col": 3,
-        "lon_col": 4,
-        "line_len": 0,
-        "date_fmt": "None",
-        "delim": "None"
-      }
-    }
+  "SIMB": {
+    "t_col": 2,
+    "lat_col": 3,
+    "lon_col": 4,
+    "line_len": 1410,
+    "date_fmt": "xl",
+    "delim": ","
+  },
+  "PacificGyre": {
+    "t_col": 2,
+    "lat_col": 3,
+    "lon_col": 4,
+    "line_len": 0,
+    "date_fmt": "None",
+    "delim": "None"
+  },
+  "ITP": {
+    "y_col": 0,
+    "t_col": 1,
+    "lat_col": 3,
+    "lon_col": 2,
+    "line_len": 60,
+    "date_fmt": "ddoy",
+    "delim": "None"
+  },
+  "UPTEMPO": {
+    "y_col": 1,
+    "t_col": 5,
+    "lat_col": 6,
+    "lon_col": 7,
+    "line_len": 130,
+    "date_fmt": "ddoy",
+    "delim": "None"
+  },
+  "SVP": {
+    "y_col": 1,
+    "t_col": 5,
+    "lat_col": 6,
+    "lon_col": 7,
+    "line_len": 140,
+    "date_fmt": "ddoy",
+    "delim": "None"
+  }
+}
